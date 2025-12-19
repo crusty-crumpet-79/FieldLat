@@ -1,1 +1,14 @@
 # Files to ignore
+# Ignore Python build files
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Ignore OS files
+.DS_Store
+
+# Ignore Data files 
+*.vtk
+*.stl
+*.feb
