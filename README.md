@@ -6,10 +6,11 @@ Unlike simple thickness modulation, FieldLat implements **Variable Cell Size** v
 
 ## Key Features
 
+- **Multiple Topologies**: Supports **Gyroid**, **Diamond** (Schwarz D), **Primitive** (Schwarz P), and **Lidinoid** TPMS structures.
 - **Variable Cell Size**: Dynamically adjusts pore size based on field intensity.
-- **Lattice Blending**: Smoothly interpolates between different Gyroid frequencies.
+- **Lattice Blending**: Smoothly interpolates between different lattice frequencies.
 - **Field Mapping**: Automatically normalizes input scalar fields (stress/displacement) to control lattice density.
-- **Mesh Support**: Handles FEBio/VTK data and automatically converts Cell Data to Point Data if necessary.
+- **Watertight Results**: Includes padding options to ensure the final mesh is closed and printable.
 - **PyVista Integration**: Built on PyVista for efficient 3D processing and visualization.
 
 ## Installation
@@ -43,6 +44,7 @@ mesh = load_febio_vtk('simulation_result.vtk', field_name='stress')
 lattice = generate_adaptive_lattice(
     mesh,
     field_name='stress',
+    lattice_type='gyroid', # Options: 'gyroid', 'diamond', 'primitive', 'lidinoid'
     resolution=100,      # Grid resolution (higher = finer detail)
     base_scale=10.0,     # Frequency for low-stress areas
     dense_scale=25.0,    # Frequency for high-stress areas
@@ -66,9 +68,23 @@ python examples/demo_script.py
 
 This will:
 1. Create a dummy `input.vtk` file if one doesn't exist.
-2. Generate an adaptive Gyroid lattice blending between two frequencies.
+2. Generate an adaptive lattice (default: Gyroid) blending between two frequencies.
 3. Display the result in an interactive 3D window.
 4. Save the result to `output_lattice.stl`.
+
+### Changing the Topology
+
+To generate a different lattice structure (e.g., Lidinoid or Diamond), open `examples/demo_script.py` and modify the `lattice_type` parameter in the `generate_adaptive_lattice` function call:
+
+```python
+lattice = generate_adaptive_lattice(
+    mesh, 
+    field_name=field_name,
+    lattice_type='lidinoid', # Change this to 'diamond', 'primitive', or 'lidinoid'
+    resolution=60,
+    # ... other parameters
+)
+```
 
 ## API Reference
 
@@ -78,20 +94,24 @@ This will:
 def generate_adaptive_lattice(
     mesh: pv.DataSet,
     field_name: str,
+    lattice_type: str = 'gyroid',
     resolution: int = 50,
     base_scale: float = 10.0,
     dense_scale: float = 25.0,
-    threshold: float = 0.3
+    threshold: float = 0.3,
+    pad_width: int = 2
 ) -> pv.PolyData
 ```
 
 **Parameters:**
 - `mesh`: A PyVista DataSet containing the source geometry and scalar field.
 - `field_name`: The name of the scalar array in `mesh.point_data` to use as the control field.
+- `lattice_type`: The TPMS topology type. Options: `'gyroid'`, `'diamond'`, `'primitive'`, `'lidinoid'`.
 - `resolution`: The resolution of the voxel grid (cubed) used for marching cubes.
-- `base_scale`: The Gyroid frequency factor for regions with minimum field values (larger cells).
-- `dense_scale`: The Gyroid frequency factor for regions with maximum field values (smaller cells).
+- `base_scale`: The frequency factor for regions with minimum field values (larger cells).
+- `dense_scale`: The frequency factor for regions with maximum field values (smaller cells).
 - `threshold`: Controls the isosurface level, effectively setting the constant wall thickness.
+- `pad_width`: Number of voxel layers to force to void at the boundaries to ensure a watertight mesh.
 
 **Returns:**
 - `pv.PolyData`: A mesh representing the generated lattice structure.

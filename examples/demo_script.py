@@ -37,11 +37,12 @@ def main():
         return
 
     # 3. Generate Lattice
-    print("Generating adaptive Gyroid lattice with Variable Cell Size...")
+    print("Generating adaptive lattice with Variable Cell Size...")
     try:
         lattice = generate_adaptive_lattice(
             mesh, 
             field_name=field_name,
+            lattice_type='gyroid', # Options: 'gyroid', 'diamond', 'primitive', 'lidinoid'
             resolution=60,         # Voxel grid resolution
             base_scale=10.0,       # Frequency for low-stress areas (larger cells)
             dense_scale=25.0,      # Frequency for high-stress areas (smaller cells)

@@ -2,9 +2,59 @@ import numpy as np
 import pyvista as pv
 from skimage.measure import marching_cubes
 
+def get_lattice_field(lattice_type: str, scale: float, X: np.ndarray, Y: np.ndarray, Z: np.ndarray) -> np.ndarray:
+    """
+    Computes the scalar field values for the specified lattice topology.
+    
+    Args:
+        lattice_type (str): 'gyroid', 'diamond', 'primitive', or 'lidinoid'.
+        scale (float): The frequency/scale factor for the coordinates.
+        X, Y, Z (np.ndarray): Meshgrid coordinates.
+        
+    Returns:
+        np.ndarray: The computed scalar field.
+    """
+    if lattice_type == 'lidinoid':
+        # Note: Lidinoid uses 2*x in its formula, effectively doubling the density.
+        # We divide by 2.0 here so that 'base_scale' results in roughly the same cell size
+        # as other lattice types.
+        sx, sy, sz = (scale * X) / 2.0, (scale * Y) / 2.0, (scale * Z) / 2.0
+        
+        term1 = 0.5 * (np.sin(2*sx)*np.cos(sy)*np.sin(sz) + 
+                       np.sin(2*sy)*np.cos(sz)*np.sin(sx) + 
+                       np.sin(2*sz)*np.cos(sx)*np.sin(sy))
+        
+        term2 = 0.5 * (np.cos(2*sx)*np.cos(2*sy) + 
+                       np.cos(2*sy)*np.cos(2*sz) + 
+                       np.cos(2*sz)*np.cos(2*sx))
+                       
+        return term1 - term2 + 0.15
+
+    # Standard scaling for other types
+    sx, sy, sz = scale * X, scale * Y, scale * Z
+
+    if lattice_type == 'gyroid':
+        return np.sin(sx) * np.cos(sy) + np.sin(sy) * np.cos(sz) + np.sin(sz) * np.cos(sx)
+
+    elif lattice_type == 'diamond':
+        # Schwarz D
+        return (np.sin(sx) * np.sin(sy) * np.sin(sz) + 
+                np.sin(sx) * np.cos(sy) * np.cos(sz) + 
+                np.cos(sx) * np.sin(sy) * np.cos(sz) + 
+                np.cos(sx) * np.cos(sy) * np.sin(sz))
+
+    elif lattice_type == 'primitive':
+        # Schwarz P
+        return np.cos(sx) + np.cos(sy) + np.cos(sz)
+
+    else:
+        raise ValueError(f"Unsupported lattice_type: '{lattice_type}'. "
+                         "Choose from 'gyroid', 'diamond', 'primitive', 'lidinoid'.")
+
 def generate_adaptive_lattice(
     mesh: pv.DataSet,
     field_name: str,
+    lattice_type: str = 'gyroid',
     resolution: int = 50,
     base_scale: float = 10.0,
     dense_scale: float = 25.0,
@@ -12,11 +62,12 @@ def generate_adaptive_lattice(
     pad_width: int = 2
 ) -> pv.PolyData:
     """
-    Generates an adaptive Gyroid lattice with variable cell size via lattice blending.
+    Generates an adaptive lattice (TPMS) with variable cell size via lattice blending.
 
     Args:
         mesh (pv.DataSet): The source mesh containing the scalar field.
         field_name (str): The name of the scalar field in point_data.
+        lattice_type (str): Topology type ('gyroid', 'diamond', 'primitive', 'lidinoid').
         resolution (int): Resolution of the voxel grid (cubed).
         base_scale (float): The frequency for low-stress areas (larger cells).
         dense_scale (float): The frequency for high-stress areas (smaller cells).
@@ -60,19 +111,12 @@ def generate_adaptive_lattice(
     else:
         w = np.zeros_like(field_values)
 
-    # 4. Calculate Blended Gyroid Field
-    # gyroid(x, y, z) = sin(x)cos(y) + sin(y)cos(z) + sin(z)cos(x)
-    
-    def get_gyroid(scale, X, Y, Z):
-        # We scale the coordinates by the frequency
-        sx, sy, sz = scale * X, scale * Y, scale * Z
-        return np.sin(sx) * np.cos(sy) + np.sin(sy) * np.cos(sz) + np.sin(sz) * np.cos(sx)
-
-    gyroid_low = get_gyroid(base_scale, X, Y, Z)
-    gyroid_high = get_gyroid(dense_scale, X, Y, Z)
+    # 4. Calculate Blended Lattice Field
+    field_low = get_lattice_field(lattice_type, base_scale, X, Y, Z)
+    field_high = get_lattice_field(lattice_type, dense_scale, X, Y, Z)
 
     # Linear interpolation between low and high frequency fields
-    result = (gyroid_low * (1 - w)) + (gyroid_high * w)
+    result = (field_low * (1 - w)) + (field_high * w)
 
     # 5. Apply Wall Thickness Threshold
     # Isosurface: |result| - threshold = 0
@@ -82,9 +126,6 @@ def generate_adaptive_lattice(
     # 6. Apply Padding to force watertight mesh
     # We force the boundary voxels to a positive value (Void) to close the mesh.
     if pad_width > 0:
-        # Create a boolean mask of the same shape, initially all False (keep values)
-        # Or simpler, just set the slices.
-        # We set to 1.0 which is > 0 (Void).
         scalar_field[:pad_width, :, :] = 1.0
         scalar_field[-pad_width:, :, :] = 1.0
         scalar_field[:, :pad_width, :] = 1.0
