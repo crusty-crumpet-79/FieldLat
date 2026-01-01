@@ -12,3 +12,6 @@ venv/
 *.vtk
 *.stl
 *.feb
+
+.gemini/
+gha-creds-*.json
