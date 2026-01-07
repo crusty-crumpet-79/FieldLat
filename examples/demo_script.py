@@ -45,9 +45,10 @@ def main():
             lattice_type='lidinoid', # Options: 'gyroid', 'diamond', 'primitive', 'lidinoid'
             structure_mode='sheet',  # Options: 'sheet', 'strut'
             resolution=60,         # Voxel grid resolution
-            base_scale=10.0,       # Frequency for low-stress areas (larger cells)
-            dense_scale=25.0,      # Frequency for high-stress areas (smaller cells)
-            threshold=0.4          # Constant wall thickness
+            base_scale=10.0,       # Angular Frequency k_min for low-stress areas
+            dense_scale=25.0,      # Angular Frequency k_max for high-stress areas
+            threshold=0.4,         # Constant wall thickness
+            pad_width=2            # Boundary padding for watertightness
         )
         print("Lattice generation complete.")
         
