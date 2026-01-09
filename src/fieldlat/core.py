@@ -1,20 +1,30 @@
 import numpy as np
 import pyvista as pv
 from skimage.measure import marching_cubes
+from typing import Union
 
-def get_lattice_field(lattice_type: str, scale: np.ndarray, X: np.ndarray, Y: np.ndarray, Z: np.ndarray) -> np.ndarray:
+def get_lattice_field(
+    lattice_type: str, 
+    scale: Union[float, np.ndarray], 
+    X: np.ndarray, 
+    Y: np.ndarray, 
+    Z: np.ndarray
+) -> np.ndarray:
     """
-    Computes the scalar field values for the specified lattice topology using Domain Warping.
+    Computes the scalar field values for the specified lattice topology.
+    Supports both constant scale (Field Blending) and spatially varying scale (Domain Warping).
     
     Args:
         lattice_type (str): 'gyroid', 'diamond', 'primitive', or 'lidinoid'.
-        scale (np.ndarray): The frequency/scale factor map (k_map) for the coordinates.
+        scale (float | np.ndarray): The frequency/scale factor. 
+                                    Can be a float (for blend mode) or a map (for warp mode).
         X, Y, Z (np.ndarray): Meshgrid coordinates.
         
     Returns:
         np.ndarray: The computed scalar field.
     """
-    # Domain Warping: Multiply coordinates by the spatially varying scale (frequency) map
+    # Multiply coordinates by the scale (frequency)
+    # Numpy broadcasting handles both float scalar and array map automatically
     sx, sy, sz = scale * X, scale * Y, scale * Z
 
     if lattice_type == 'lidinoid':
@@ -62,10 +72,11 @@ def generate_adaptive_lattice(
     base_scale: float = 10.0,
     dense_scale: float = 25.0,
     threshold: float = 0.3,
-    pad_width: int = 2
+    pad_width: int = 2,
+    gradient_strategy: str = 'blend'
 ) -> pv.PolyData:
     """
-    Generates an adaptive lattice (TPMS) using Domain Warping (Frequency Modulation).
+    Generates an adaptive lattice (TPMS) using either Field Blending or Domain Warping.
 
     Args:
         mesh (pv.DataSet): The source mesh containing the scalar field.
@@ -81,6 +92,11 @@ def generate_adaptive_lattice(
                            - In 'strut' mode: Defines Volume Fraction/Isovalue.
         pad_width (int): Number of voxel layers to force to void at the boundaries.
                          This ensures the mesh is watertight (capped). Default is 2.
+        gradient_strategy (str): Strategy for transitioning between scales.
+                                 - 'blend': Generates two full fields and blends them using a sigmoid.
+                                            Better for preserving lattice integrity (default).
+                                 - 'warp': Modulates frequency directly (Domain Warping).
+                                           Smooth gradients but creates geometric distortion/artifacts.
 
     Returns:
         pv.PolyData: The extracted isosurface mesh of the lattice.
@@ -118,18 +134,32 @@ def generate_adaptive_lattice(
     else:
         w = np.zeros_like(field_values)
 
-    # 4. Calculate Frequency Map (k_map) for Domain Warping
-    # k_min = (2 * np.pi) / max_cell_size  <-- conceptually, provided via base_scale
-    # k_max = (2 * np.pi) / min_cell_size  <-- conceptually, provided via dense_scale
+    # 4. Generate Lattice Field based on Gradient Strategy
     k_min = base_scale
     k_max = dense_scale
-    
-    k_map = k_min + (k_max - k_min) * w
 
-    # 5. Generate Lattice Field using the Frequency Map
-    result = get_lattice_field(lattice_type, k_map, X, Y, Z)
+    if gradient_strategy == 'warp':
+        # Domain Warping: Modulate frequency spatially
+        k_map = k_min + (k_max - k_min) * w
+        result = get_lattice_field(lattice_type, k_map, X, Y, Z)
 
-    # 6. Apply Structure Mode Logic
+    elif gradient_strategy == 'blend':
+        # Field Blending: Generate two discrete fields and blend
+        field_low = get_lattice_field(lattice_type, k_min, X, Y, Z)
+        field_high = get_lattice_field(lattice_type, k_max, X, Y, Z)
+
+        # Apply Sigmoid function to weight map to sharpen the transition
+        # This reduces the "transition zone" where destructive interference occurs
+        # 10 is the steepness factor
+        w_sharp = 1.0 / (1.0 + np.exp(-10.0 * (w - 0.5)))
+        
+        # Linear Blend of the fields using sharpened weights
+        result = field_low * (1.0 - w_sharp) + field_high * w_sharp
+
+    else:
+        raise ValueError(f"Unknown gradient_strategy: '{gradient_strategy}'. Use 'blend' or 'warp'.")
+
+    # 5. Apply Structure Mode Logic
     if structure_mode == 'sheet':
         # Sheet/Shell: Wall around the zero isosurface
         # Values < 0 are inside the wall (solid), Values > 0 are air (void)
@@ -141,7 +171,7 @@ def generate_adaptive_lattice(
     else:
         raise ValueError(f"Unknown structure_mode: '{structure_mode}'. Use 'sheet' or 'strut'.")
 
-    # 7. Apply Padding to force watertight mesh
+    # 6. Apply Padding to force watertight mesh
     if pad_width > 0:
         scalar_field[:pad_width, :, :] = 1.0
         scalar_field[-pad_width:, :, :] = 1.0
@@ -150,7 +180,7 @@ def generate_adaptive_lattice(
         scalar_field[:, :, :pad_width] = 1.0
         scalar_field[:, :, -pad_width:] = 1.0
 
-    # 8. Extract Surface using Marching Cubes
+    # 7. Extract Surface using Marching Cubes
     verts, faces, normals, values = marching_cubes(
         scalar_field, 
         level=0.0, 
@@ -160,7 +190,7 @@ def generate_adaptive_lattice(
     # Offset vertices by the origin
     verts += np.array([bounds[0], bounds[2], bounds[4]])
 
-    # 9. Convert to PyVista Mesh
+    # 8. Convert to PyVista Mesh
     n_faces = faces.shape[0]
     padding = np.full((n_faces, 1), 3)
     pv_faces = np.hstack((padding, faces)).flatten()
