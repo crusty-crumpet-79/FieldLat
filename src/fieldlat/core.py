@@ -5,34 +5,29 @@ from typing import Union
 
 def get_lattice_field(
     lattice_type: str, 
-    scale: Union[float, np.ndarray], 
-    X: np.ndarray, 
-    Y: np.ndarray, 
-    Z: np.ndarray
+    px: np.ndarray, 
+    py: np.ndarray, 
+    pz: np.ndarray
 ) -> np.ndarray:
     """
     Computes the scalar field values for the specified lattice topology.
-    Supports both constant scale (Field Blending) and spatially varying scale (Domain Warping).
     
     Args:
         lattice_type (str): 'gyroid', 'diamond', 'primitive', or 'lidinoid'.
-        scale (float | np.ndarray): The frequency/scale factor. 
-                                    Can be a float (for blend mode) or a map (for warp mode).
-        X, Y, Z (np.ndarray): Meshgrid coordinates.
+        px, py, pz (np.ndarray): The phase maps (coordinates * frequency or integrated phase).
         
     Returns:
         np.ndarray: The computed scalar field.
     """
-    # Multiply coordinates by the scale (frequency)
-    # Numpy broadcasting handles both float scalar and array map automatically
-    sx, sy, sz = scale * X, scale * Y, scale * Z
+    # Use phase coordinates directly
+    sx, sy, sz = px, py, pz
 
     if lattice_type == 'lidinoid':
         # Lidinoid Special Case:
-        # The logic maintains gx = 2 * x * k_map to preserve the 2x density 
+        # The logic maintains gx = 2 * phase to preserve the 2x density 
         # relative to the map naturally found in the sin(2x) term.
         
-        # Double frequency terms (2 * k * x)
+        # Double frequency terms (2 * phase)
         gx, gy, gz = 2.0 * sx, 2.0 * sy, 2.0 * sz
         
         term1 = 0.5 * (np.sin(gx)*np.cos(sy)*np.sin(sz) + 
@@ -96,7 +91,7 @@ def generate_adaptive_lattice(
                                  - 'blend': Generates two full fields and blends them using a sigmoid.
                                             Better for preserving lattice integrity (default).
                                  - 'warp': Modulates frequency directly (Domain Warping).
-                                           Smooth gradients but creates geometric distortion/artifacts.
+                                           Uses Phase Integration to prevent coordinate drift artifacts.
 
     Returns:
         pv.PolyData: The extracted isosurface mesh of the lattice.
@@ -139,14 +134,26 @@ def generate_adaptive_lattice(
     k_max = dense_scale
 
     if gradient_strategy == 'warp':
-        # Domain Warping: Modulate frequency spatially
+        # Domain Warping: Modulate frequency spatially using Phase Integration
         k_map = k_min + (k_max - k_min) * w
-        result = get_lattice_field(lattice_type, k_map, X, Y, Z)
+        
+        # Calculate Instantaneous Phase by numerically integrating the frequency map
+        # This prevents "coordinate drift" artifacts far from the origin
+        phase_x = np.cumsum(k_map, axis=0) * grid.spacing[0]
+        phase_y = np.cumsum(k_map, axis=1) * grid.spacing[1]
+        phase_z = np.cumsum(k_map, axis=2) * grid.spacing[2]
+        
+        result = get_lattice_field(lattice_type, phase_x, phase_y, phase_z)
 
     elif gradient_strategy == 'blend':
         # Field Blending: Generate two discrete fields and blend
-        field_low = get_lattice_field(lattice_type, k_min, X, Y, Z)
-        field_high = get_lattice_field(lattice_type, k_max, X, Y, Z)
+        
+        # Calculate phases (simple multiplication)
+        px_low, py_low, pz_low = k_min * X, k_min * Y, k_min * Z
+        px_high, py_high, pz_high = k_max * X, k_max * Y, k_max * Z
+
+        field_low = get_lattice_field(lattice_type, px_low, py_low, pz_low)
+        field_high = get_lattice_field(lattice_type, px_high, py_high, pz_high)
 
         # Apply Sigmoid function to weight map to sharpen the transition
         # This reduces the "transition zone" where destructive interference occurs
