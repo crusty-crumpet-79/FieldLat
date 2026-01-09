@@ -48,8 +48,12 @@ params = {
     "min_cell_size": safe_min * 1.5, # Default to slightly above min
     "max_cell_size": safe_max / 4.0, # Default to 1/4 of domain
     "threshold": 0.5,
-    "res": DEFAULT_RES
+    "res": DEFAULT_RES,
+    "gradient_strategy": 'blend',
+    "lattice_type": 'gyroid'
 }
+
+topologies = ['gyroid', 'diamond', 'primitive', 'lidinoid']
 
 # Keep track of the actor to remove/replace it
 current_actor = None
@@ -60,6 +64,7 @@ def update_mesh():
     
     # 1. Show a status message
     p.add_text("Generating...", name="status", position='upper_right', color='red', font_size=12)
+    p.add_text(f"Topology: {params['lattice_type'].capitalize()}", name="topo_label", position=(10, 100), font_size=12, color='black')
     
     try:
         # Convert Cell Size (L) to Angular Frequency (k)
@@ -79,9 +84,10 @@ def update_mesh():
             dense_scale=k_max,    # High Stress -> Small Cells
             base_scale=k_min,     # Low Stress -> Large Cells
             threshold=params["threshold"],
-            lattice_type='gyroid',
+            lattice_type=params["lattice_type"],
             structure_mode='sheet',
-            pad_width=2
+            pad_width=2,
+            gradient_strategy=params["gradient_strategy"]
         )
         
         # 3. Update the Plotter
@@ -100,6 +106,13 @@ def update_mesh():
         p.add_text(f"Error: {str(e)}", name="status", color='red')
 
 # --- 4. DEFINE CALLBACKS ---
+
+def set_topology(value):
+    idx = int(round(value))
+    # Clamp just in case
+    idx = max(0, min(len(topologies) - 1, idx))
+    params["lattice_type"] = topologies[idx]
+    update_mesh()
 
 def set_min_cell(value):
     # Ensure min < max
@@ -147,6 +160,15 @@ p.add_slider_widget(
     value=0.3, 
     title="Wall Thickness", 
     pointa=(0.05, 0.6), pointb=(0.25, 0.6)
+)
+
+p.add_slider_widget(
+    set_topology,
+    [0, len(topologies)-1],
+    value=0,
+    title="Topology Selector",
+    pointa=(0.05, 0.45), pointb=(0.25, 0.45),
+    fmt="%0.0f"
 )
 
 p.add_checkbox_button_widget(
