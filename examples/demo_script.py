@@ -44,9 +44,9 @@ def main():
             field_name=field_name,
             lattice_type='lidinoid', # Options: 'gyroid', 'diamond', 'primitive', 'lidinoid'
             structure_mode='sheet',  # Options: 'sheet', 'strut'
-            resolution=60,         # Voxel grid resolution
-            base_scale=10.0,       # Angular Frequency k_min for low-stress areas
-            dense_scale=25.0,      # Angular Frequency k_max for high-stress areas
+            resolution=200,         # Voxel grid resolution
+            base_scale=3.0,       # Angular Frequency k_min for low-stress areas
+            dense_scale=1.0,      # Angular Frequency k_max for high-stress areas
             threshold=0.4,         # Constant wall thickness
             pad_width=2            # Boundary padding for watertightness
         )
