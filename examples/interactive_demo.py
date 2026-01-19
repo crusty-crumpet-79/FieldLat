@@ -26,7 +26,7 @@ stress_values = (stress_values - stress_values.min()) / (stress_values.max() - s
 mesh.point_data["stress"] = stress_values
 
 # --- 2. CALCULATE SAFE BOUNDS ---
-DEFAULT_RES = 200
+DEFAULT_RES = 60
 # Calculate the physical size of one voxel
 voxel_size = (mesh.bounds[1] - mesh.bounds[0]) / DEFAULT_RES
 # Minimum safe cell size (~8 voxels for smooth definition)
