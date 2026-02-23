@@ -2,17 +2,19 @@
 
 FieldLat is a Python library for generating functionally graded lattice structures based on scalar fields (e.g., stress, strain, or temperature data from FEA simulations).
 
-Unlike simple thickness modulation, FieldLat implements **Variable Cell Size** via lattice blending. This allows for smooth transitions between low-density (large cell) and high-density (small cell) lattice regions while maintaining a constant wall thickness, optimizing structures for both weight and mechanical performance.
-
 ## Key Features
 
-- **Multiple Topologies**: Supports **Gyroid**, **Diamond** (Schwarz D), **Primitive** (Schwarz P), and **Lidinoid** TPMS structures.
-- **Sheet & Strut Modes**: Choose between double-walled (Sheet) or solid skeletal (Strut) network topologies.
-- **Variable Cell Size**: Dynamically adjusts pore size based on field intensity.
-- **Lattice Blending**: Smoothly interpolates between different lattice frequencies.
-- **Field Mapping**: Automatically normalizes input scalar fields (stress/displacement) to control lattice density.
-- **Watertight Results**: Includes padding options to ensure the final mesh is closed and printable.
-- **PyVista Integration**: Built on PyVista for efficient 3D processing and visualization.
+Supports **Gyroid**, **Diamond** (Schwarz D), **Primitive** (Schwarz P), and **Lidinoid** TPMS structures.
+
+Choose between double-walled (Sheet) or solid skeletal (Strut) network topologies.
+
+Dynamically adjusts pore size based on field intensity.
+
+Smoothly(ish) interpolates between different lattice frequencies.
+
+Automatically normalizes input scalar fields (stress/displacement) to control lattice density.
+
+Built on PyVista for efficient 3D processing and visualization.
 
 ## Installation
 
